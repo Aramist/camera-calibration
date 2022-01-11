@@ -2,6 +2,7 @@ import argparse
 import os
 from os import path
 import re
+import time
 
 import cv2
 import numpy as np
@@ -29,6 +30,15 @@ def get_arguments():
     ap.add_argument('output_path', type=str, help='A path to the output directory or file')
     ap.add_argument('--ratio', type=float, help='The ratio between the training image width or height and the images being undistorted.', default=1)
     return ap.parse_args()
+
+
+def compute_maps(frame, K, D, ratio=1):
+    dims = frame.shape[:2][::-1]
+    new_K = cv2.fisheye.estimateNewCameraMatrixForUndistortRectify(K, D, dims, np.eye(3), balance=0)
+    new_K *= ratio
+    new_K[2, 2] = 1  # The bottom right element of the matrix should always be 1
+    maps = cv2.fisheye.initUndistortRectifyMap(K, D, np.eye(3), new_K, dims, cv2.CV_16SC2)
+    return maps
 
 
 def undistort_frame(frame, maps=None, K=None, D=None, ratio=1):
@@ -172,7 +182,7 @@ def undistort_individual_video(video_path, output_path, K, D, ratio):
         undistorted_frame = undistort_frame(frame, maps=maps)
         vid_writer.write(undistorted_frame)
         frame_counter += 1
-        ret, frame = cap.read()
+        ret, frame = vid_reader.read()
         if (frame_counter % int(framerate * 15)) == 0:
             avg_speed = frame_counter / (time.time() - start_time)
             procd_seconds = int((frame_counter // framerate) % 60)
